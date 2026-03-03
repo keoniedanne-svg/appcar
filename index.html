@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation IRM - Console Radiologie</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0033 50%, #0d1b2a 100%);
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* ÉCRANS */
+        .screen {
+            flex: 1;
+            display: none;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* FORMULAIRE PATIENT */
+        .patient-form {
+            max-width: 500px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4fd1c7;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #333;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 16px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4fd1c7;
+            box-shadow: 0 0 20px rgba(79, 209, 199, 0.3);
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #4fd1c7, #00b4d8);
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(79, 209, 199, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ef476f, #ff6b9d);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #06d6a0, #26de81);
+        }
+
+        /* SUGGESTIONS IRM */
+        .irm-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .irm-option {
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 15px;
+            background: rgba(255,255,255,0.03);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .irm-option:hover, .irm-option.selected {
+            border-color: #4fd1c7;
+            background: rgba(79, 209, 199, 0.1);
+            box-shadow: 0 0 20px rgba(79, 209, 199, 0.2);
+        }
+
+        /* INTERFACE PRINCIPALE EXAMEN */
+        .main-interface {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 1fr 80px;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .left-panel, .right-panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #333;
+        }
+
+        .sequences-list {
+            height: 70%;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .sequence-item {
+            background: rgba(79, 209, 199, 0.1);
+            margin-bottom: 15px;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #4fd1c7;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        .sequence-item.active {
+            opacity: 1;
+            background: rgba(79, 209, 199, 0.2);
+            box-shadow: 0 0 20px rgba(79, 209, 199, 0.3);
+        }
+
+        .sequence-item.completed {
+            border-left-color: #06d6a0;
+            opacity: 1;
+            background: rgba(6, 214, 160, 0.1);
+        }
+
+        .sequence-progress {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .sequence-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4fd1c7, #00b4d8);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+
+        .status-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+            animation: pulse 2s infinite;
+        }
+
+        .status-light.ready { background: #4fd1c7; }
+        .status-light.active { background: #06d6a0; }
+        .status-light.error { background: #ef476f; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .bottom-bar {
+            grid-column: 1 / -1;
+            background: rgba(0,0,0,0.6);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4fd1c7;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .rapport-section {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .rapport-content {
+            background: rgba(255,255,255,0.05);
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+            border: 1px solid #4fd1c7;
+        }
+
+        /* ANIMATIONS */
+        @keyframes scan {
+            0%, 100% { box-shadow: 0 0 20px rgba(79, 209, 199, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(79, 209, 199, 0.6), 0 0 60px rgba(0, 180, 216, 0.4); }
+        }
+
+        .scanning {
+            animation: scan 1s infinite;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .main-interface {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+                gap: 10px;
+            }
+        }
+
+        .glow {
+            text-shadow: 0 0 10px #4fd1c7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ÉCRAN FORMULAIRE PATIENT -->
+        <div id="patientScreen" class="screen active">
+            <div class="patient-form">
+                <h1 class="glow" style="font-size: 2.5em; margin-bottom: 40px; color: #4fd1c7;">
+                    <i class="fas fa-brain"></i> Console IRM
+                </h1>
+                <div class="form-group">
+                    <label>Nom du patient</label>
+                    <input type="text" id="patientName" placeholder="Dupont Martin">
+                </div>
+                <div class="form-group">
+                    <label>Âge</label>
+                    <input type="number" id="patientAge" placeholder="45" min="0" max="120">
+                </div>
+                <div class="form-group">
+                    <label>N° Dossier (optionnel)</label>
+                    <input type="text" id="patientId" placeholder="IRM-2026-001">
+                </div>
+                <button class="btn" onclick="nextStep('patient')">
+                    <i class="fas fa-arrow-right"></i> Commencer examen
+                </button>
+            </div>
+        </div>
+
+        <!-- ÉCRAN CHOIX TYPE IRM -->
+        <div id="irmTypeScreen" class="screen">
+            <div style="text-align: center; max-width: 800px; margin: 0 auto;">
+                <h2 style="color: #4fd1c7; margin-bottom: 40px;">
+                    Type d'examen recommandé pour <span id="patientInfo"></span>
+                </h2>
+                <div id="irmSuggestions" class="irm-suggestions"></div>
+                <button class="btn" onclick="goBack()" style="margin-top: 30px;">
+                    <i class="fas fa-arrow-left"></i> Retour
+                </button>
+            </div>
+        </div>
+
+        <!-- ÉCRAN EXAMEN PRINCIPAL -->
+        <div id="examScreen" class="screen">
+            <div class="main-interface">
+                <!-- PANEL GAUCHE - PRÉPARATION -->
+                <div class="left-panel">
+                    <h3 style="color: #4fd1c7; margin-bottom: 20px;">
+                        <i class="fas fa-cogs"></i> Préparation
+                    </h3>
+                    <div class="status-indicator">
+                        <div id="bedStatus" class="status-light"></div>
+                        <span id="bedText">Lit : Sorti</span>
+                    </div>
+                    <button class="btn" id="bedBtn" onclick="moveBed()" style="width: 100%; margin-bottom: 15px;">
+                        <i class="fas fa-bed"></i> Rentrer le lit
+                    </button>
+                    
+                    <button class="btn" id="calibrateBtn" onclick="startCalibration()" disabled>
+                        <i class="fas fa-sync-alt"></i> Calibrage
+                    </button>
+                </div>
+
+                <!-- ZONE CENTRALE - SÉQUENCES -->
+                <div style="display: flex; flex-direction: column;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 id="examTitle" style="color: #4fd1c7;">IRM Rachis Lombaire</h2>
+                        <div style="font-size: 14px; color: #aaa;">Séquence <span id="currentSequence">1</span>/15</div>
+                    </div>
+                    <div id="sequencesList" class="sequences-list"></div>
+                </div>
+
+                <!-- PANEL DROIT - COMMUNICATION -->
+                <div class="right-panel">
+                    <h3 style="color: #4fd1c7; margin-bottom: 20px;">
+                        <i class="fas fa-headset"></i> Communication
+                    </h3>
+                    <button class="btn" onclick="toggleMicro()" id="microBtn" style="width: 100%; margin-bottom: 15px;">
+                        <i class="fas fa-microphone"></i> Parler au patient
+                    </button>
+                    <div id="patientMessages" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; min-height: 100px; font-style: italic; color: #aaa;">
+                        Patient : "Tout va bien, je suis prêt."
+                    </div>
+                </div>
+
+                <!-- BARRE INFERIEURE -->
+                <div class="bottom-bar">
+                    <div class="timer" id="mainTimer">15:00</div>
+                    <div style="font-size: 18px; font-weight: 500;">Durée totale : <span id="totalTime">0:00</span></div>
+                    <button class="btn btn-danger" onclick="emergencyStop()">
+                        <i class="fas fa-exclamation-triangle"></i> ARRÊT URGENCE
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ÉCRAN RAPPORT FINAL -->
+        <div id="rapportScreen" class="screen">
+            <div class="rapport-section">
+                <h1 style="color: #06d6a0; font-size: 3em; margin-bottom: 20px;">
+                    <i class="fas fa-check-circle"></i> IRM TERMINÉE
+                </h1>
+                <h2 style="color: #4fd1c7; margin-bottom: 40px;">avec succès !</h2>
+                
+                <div class="rapport-content">
+                    <div id="rapportDetails"></div>
+                    <button class="btn btn-success" onclick="generatePDF()" style="margin-top: 20px;">
+                        <i class="fas fa-download"></i> Télécharger Rapport PDF
+                    </button>
+                    <button class="btn" onclick="restartExam()" style="margin-left: 15px;">
+                        <i class="fas fa-redo"></i> Nouvel examen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ÉTAT GLOBAL DE L'APPLICATION
+        let appState = {
+            patient: { name: '', age: 0, id: '' },
+            examType: '',
+            sequences: [],
+            currentSequence: 0,
+            bedIn: false,
+            calibrated: false,
+            examRunning: false,
+            mainTimer: 15 * 60, // 15 minutes
+            totalTime: 0,
+            sequenceTimers: [],
+            microActive: false,
+            examCompleted: false
+        };
+
+        // SÉQUENCES D'EXEMPLE PAR TYPE
+        const sequencesData = {
+            'pediatrique': [
+                'T1 Crâne', 'T2 Crâne', 'FLAIR', 'DWI', 'T1 Abdomen', 'T2 Abdomen',
+                'Corps entier T1', 'Corps entier T2'
+            ],
+            'adulte': [
+                'T1 Rachis', 'T2 Rachis', 'STIR Rachis', 'T1 Crâne', 'T2 Crâne',
+                'FLAIR', 'DWI', 'Angio', 'Perfusion', 'Spectro'
+            ],
+            'senior': [
+                'T1 Genou', 'T2 Genou', 'PD Genou', 'T1 Hanche', 'T2 Hanche',
+                'STIR Hanche', 'T1 Cœur', 'T2 Cœur'
+            ]
+        };
+
+        // INITIALISATION
+        document.addEventListener('DOMContentLoaded', function() {
+            generateSounds();
+            updateMainTimer();
+        });
+
+        // ÉTAPE 1 : FORMULAIRE PATIENT
+        function nextStep(step) {
+            if (step === 'patient') {
+                const name = document.getElementById('patientName').value;
+                const age = parseInt(document.getElementById('patientAge').value);
+                const id = document.getElementById('patientId').value;
+                
+                if (!name || !age) {
+                    alert('Veuillez remplir au moins le nom et l\'âge');
+                    return;
+                }
+                
+                appState.patient = { name, age, id };
+                showIrmSuggestions();
+            }
+        }
+
+        // SUGGESTIONS IRM SELON ÂGE
+        function showIrmSuggestions() {
+            const age = appState.patient.age;
+            let category, suggestions;
+            
+            if (age < 15) {
+                category = 'pediatrique';
+                suggestions = ['IRM Cérébrale Pédiatrique', 'IRM Abdominale Pédiatrique'];
+            } else if (age <= 60) {
+                category = 'adulte';
+                suggestions = ['IRM Corps Entier', 'IRM Rachis', 'IRM Crânien', 'IRM Bassin'];
+            } else {
+                category = 'senior';
+                suggestions = ['IRM Articulaire', 'IRM Cardiaque', 'IRM Rachis'];
+            }
+            
+            document.getElementById('patientInfo').textContent = `${appState.patient.name}, ${age} ans`;
+            
+            const container = document.getElementById('irmSuggestions');
+            container.innerHTML = '';
+            
+            suggestions.forEach((type, index) => {
+                const div = document.createElement('div');
+                div.className = 'irm-option';
+                div.innerHTML = `<h4>${type}</h4><p>${sequencesData[category].length} séquences</p>`;
+                div.onclick = () => startExam(category, type);
+                container.appendChild(div);
+            });
+            
+            showScreen('irmTypeScreen');
+        }
+
+        // DÉBUT EXAMEN
+        function startExam(category, type) {
+            appState.examType = type;
+            appState.sequences = sequencesData[category].map((name, i) => ({
+                name,
+                duration: Math.floor(Math.random() * 30 + 20), // 20-50s
+                completed: false,
+                timer: null
+            }));
+            
+            document.getElementById('examTitle').textContent = type;
+            renderSequences();
+            showScreen('examScreen');
+            
+            playSound('startup');
+        }
+
+        // AFFICHAGE SÉQUENCES
+        function renderSequences() {
+            const container = document.getElementById('sequencesList');
+            container.innerHTML = '';
+            
+            appState.sequences.forEach((seq, index) => {
+                const div = document.createElement('div');
+                div.className = `sequence-item ${index === appState.currentSequence ? 'active' : ''}`;
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span><i class="fas fa-camera"></i> ${seq.name}</span>
+                        <span>${seq.duration}s</span>
+                    </div>
+                    <div class="sequence-progress">
+                        <div class="sequence-progress-fill" style="width: ${seq.completed ? 100 : 0}%"></div>
+                    </div>
+                    <button class="btn" style="width: 100%; margin-top: 10px; font-size: 14px;" 
+                            ${index !== appState.currentSequence || appState.examRunning ? 'disabled' : ''}
+                            onclick="startSequence(${index})">
+                        ${index === appState.currentSequence ? '<i class="fas fa-play"></i> Démarrer' : 'En attente'}
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+            
+            updateSequenceCounter();
+        }
+
+        // DÉMARRER SÉQUENCE
+        function startSequence(index) {
+            if (index !== appState.currentSequence || appState.examRunning) return;
+            
+            appState.examRunning = true;
+            const seq = appState.sequences[index];
+            let progress = 0;
+            
+            seq.timer = setInterval(() => {
+                progress += 1;
+                const fill = document.querySelectorAll('.sequence-progress-fill')[index];
+                if (fill) fill.style.width = (progress / seq.duration * 100) + '%';
+                
+                if (progress >= seq.duration) {
+                    clearInterval(seq.timer);
+                    seq.completed = true;
+                    appState.currentSequence++;
+                    appState.examRunning = false;
+                    
+                    document.querySelectorAll('.sequence-item')[index].classList.add('completed');
+                    playSound('sequence-complete');
+                    
+                    if (appState.currentSequence >= appState.sequences.length) {
+                        completeExam();
+                    } else {
+                        renderSequences();
+                    }
+                }
+            }, 1000);
+            
+            // Effet visuel scanning
+            document.querySelector('.main-interface').classList.add('scanning');
+            playSound('scan');
+        }
+
+        // DÉPLACEMENT LIT
+        function moveBed() {
+            if (appState.bedIn) {
+                appState.bedIn = false;
+                document.getElementById('bedBtn').innerHTML = '<i class="fas fa-bed"></i> Rentrer le lit';
+                document.getElementById('bedText').textContent = 'Lit : Sorti';
+                document.getElementById('bedStatus').className = 'status-light';
+                playSound('mechanical');
+            } else {
+                // Simulation 1 minute
+                appState.bedIn = true;
+                document.getElementById('bedBtn').innerHTML = '<i class="fas fa-lock"></i> Lit rentré';
+                document.getElementById('bedBtn').disabled = true;
+                document.getElementById('bedText').textContent = 'Lit : Rentré';
+                document.getElementById('bedStatus').className = 'status-light ready';
+                
+                setTimeout(() => {
+                    document.getElementById('calibrateBtn').disabled = false;
+                    playSound('bed-complete');
+                }, 60000); // 1 minute
+            }
+        }
+
+        // CALIBRAGE
+        function startCalibration() {
+            let calibrations = 0;
+            const total = 6; // 6 validations = 1 minute
+            
+            const interval = setInterval(() => {
+                calibrations++;
+                playSound('calibration');
+                
+                if (confirm(`Calibrage ${calibrations}/${total} - Valider ?`)) {
+                    if (calibrations >= total) {
+                        clearInterval(interval);
+                        appState.calibrated = true;
+                        document.getElementById('calibrateBtn').innerHTML = '<i class="fas fa-check"></i> Calibré ✓';
+                        document.getElementById('calibrateBtn').className = 'btn btn-success';
+                        playSound('success');
+                    }
+                } else {
+                    clearInterval(interval);
+                    alert('Calibrage annulé');
+                }
+            }, 10000); // Toutes les 10s
+        }
+
+        // MICRO PATIENT
+        function toggleMicro() {
+            appState.microActive = !appState.microActive;
+            const btn = document.getElementById('microBtn');
+            const messages = document.getElementById('patientMessages');
+            
+            if (appState.microActive) {
+                btn.innerHTML = '<i class="fas fa-stop"></i> Arrêter micro';
+                btn.classList.add('btn-danger');
+                messages.innerHTML = '🎤 Enregistrement vocal actif...';
+            } else {
+                btn.innerHTML = '<i class="fas fa-microphone"></i> Parler au patient';
+                btn.classList.remove('btn-danger');
+                const responses = [
+                    "Patient : \"Tout va bien, je suis calme.\"",
+                    "Patient : \"Je sens une chaleur, c'est normal ?\"",
+                    "Patient : \"Ça bourdonne dans les oreilles.\"",
+                    "Patient : \"Je suis prêt pour la suite.\""
+                ];
+                messages.innerHTML = responses[Math.floor(Math.random() * responses.length)];
+                playSound('voice');
+            }
+        }
+
+        // CHRONOMÈTRES
+        function updateMainTimer() {
+            if (appState.mainTimer > 0 && appState.examRunning) {
+                appState.mainTimer--;
+                const minutes = Math.floor(appState.mainTimer / 60);
+                const seconds = appState.mainTimer % 60;
+                document.getElementById('mainTimer').textContent = 
+                    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            if (appState.mainTimer <= 0) {
+                emergencyStop();
+            }
+            
+            setTimeout(updateMainTimer, 1000);
+        }
+
+        function updateSequenceCounter() {
+            document.getElementById('currentSequence').textContent = appState.currentSequence + 1;
+        }
+
+        // FIN EXAMEN
+        function completeExam() {
+            appState.examCompleted = true;
+            showScreen('rapportScreen');
+            
+            const totalDuration = Math.floor(appState.totalTime / 60);
+            document.getElementById('rapportDetails').innerHTML = `
+                <h3>${appState.patient.name}</h3>
+                <p><strong>Âge :</strong> ${appState.patient.age} ans</p>
+                <p><strong>Type :</strong> ${appState.examType}</p>
+                <p><strong>Séquences :</strong> ${appState.sequences.length}/15 terminées</p>
+                <p><strong>Durée :</strong> ${totalDuration} min ${appState.totalTime % 60}s</p>
+                <p style="color: #06d6a0;"><i class="fas fa-check-circle"></i> Aucun incident</p>
+            `;
+            
+            playSound('exam-complete');
+        }
+
+        // FONCTIONS NAVIGATION
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function goBack() {
+            showScreen('patientScreen');
+            document.getElementById('patientName').value = appState.patient.name;
+            document.getElementById('patientAge').value = appState.patient.age;
+            document.getElementById('patientId').value = appState.patient.id;
+        }
+
+        // ARRÊT URGENCE
+        function emergencyStop() {
+            if (confirm('Arrêt d\'urgence ?')) {
+                appState.sequences.forEach(seq => {
+                    if (seq.timer) clearInterval(seq.timer);
+                });
+                alert('Examen interrompu - sécurité prioritaire');
+                restartExam();
+            }
+        }
+
+        // RAPPORT PDF (simulation)
+        function generatePDF() {
+            const content = `
+IRM TERMINÉE - RAPPORT AUTOMATIQUE
+
+Patient: ${appState.patient.name}
+Âge: ${appState.patient.age} ans
+Type: ${appState.examType}
+Date: ${new Date().toLocaleDateString('fr-FR')}
+
+RÉSULTATS:
+✓ ${appState.sequences.length} séquences acquises
+✓ Durée: ${Math.floor(appState.totalTime/60)}min
+✓ Qualité: Excellente
+
+Opérateur: Console IRM Simulator v1.0
+            `;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `rapport_irm_${appState.patient.id || 'unknown'}.txt`;
+            a.click();
+        }
+
+        // REDÉMARRER
+        function restartExam() {
+            Object.assign(appState, {
+                patient: { name: '', age: 0, id: '' },
+                examType: '',
+                sequences: [],
+                currentSequence: 0,
+                bedIn: false,
+                calibrated: false,
+                examRunning: false,
+                mainTimer: 15 * 60,
+                totalTime: 0,
+                sequenceTimers: [],
+                microActive: false,
+                examCompleted: false
+            });
+            
+            document.getElementById('patientName').value = '';
+            document.getElementById('patientAge').value = '';
+            document.getElementById('patientId').value = '';
+            document.getElementById('mainTimer').textContent = '15:00';
+            showScreen('patientScreen');
+        }
+
+        // SONS (Web Audio API)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function generateSounds() {
+            // Son de démarrage
+            window.soundStartup = () => oscillator(800, 0.1, 'square');
+            window.soundScan = () => oscillator(200, 0.3, 'sawtooth');
+            window.soundCalibration = () => oscillator(1000, 0.05, 'sine');
+            window.soundSuccess = () => oscillator(1200, 0.2, 'sine');
+            window.soundMechanical = () => oscillator(150, 0.4, 'sawtooth');
+            window.soundVoice = () => oscillator(600, 0.1, 'sine');
+            window.soundExamComplete = () => {
+                oscillator(800, 0.2, 'sine');
+                setTimeout(() => oscillator(1000, 0.3, 'sine'), 200);
+            };
+            window.soundSequenceComplete = () => oscillator(1200, 0.15, 'triangle');
+            window.soundBedComplete = () => oscillator(900, 0.25, 'sine');
+        }
+
+        function oscillator(frequency, duration, type = 'sine') {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playSound(soundName) {
+            if (window[`sound${soundName.charAt(0).toUpperCase() + soundName.slice(1)}`]) {
+                window[`sound${soundName.charAt(0).toUpperCase() + soundName.slice(1)}`]();
+            }
+        }
+    </script>
+</body>
+</html>
